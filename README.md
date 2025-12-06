@@ -5,6 +5,18 @@ We are comparing two differential privacy mechanisms: standard DP-SGD and the Bo
 
 Our goal is to use empirical evaluation of utility and privacy performance to demonstrate that combining CDP with SGD performs significantly better than using DP with SGD, utilizing the performance evaluation in the paper that first proposed DP-SGD (https://arxiv.org/pdf/1607.00133) to understand how DP-SGD was evaluated. we follow the same experimental setup to evaluate CDP-SGD (by replacing DP noise with CDP noise) and then compare their performance. CDP also has publicly available code, which is used for parts of the experiments. https://github.com/CompositeDP/CompositeDP.git
 
+SGD_CDP_Project/
+├─ requirements.txt
+├─ train_experiment_tf.py          # main training + evaluation script (MNIST + Adult, DP-SGD + C-DP)
+├─ batch_run_experiments.py        # runs a grid of experiments (epsilons, mechanisms, datasets)
+├─ plot_results.py                 # plots accuracy vs epsilon, membership AUC vs epsilon
+├─ datasets.py                     # MNIST and Adult Income loaders
+├─ models.py                       # CNN for MNIST, MLP for Adult
+├─ tensorflow_privacy_utils.py     # helper for DP-SGD optimizer + epsilon computation
+├─ composite_dp_utils.py           # wrapper around CompositeDP + k auto-sweep + logging
+├─ membership_inference.py         # loss-based membership inference attack
+└─ results/                        # (auto-created) metrics and models per run
+
 # How to Run:
 
 # 1) (optional) create venv
@@ -17,8 +29,37 @@ python -m venv .venv
 # 2) install
 pip install -r requirements.txt
 
-# 3) DP-SGD (Gaussian) on MNIST @ ε≈2 (heuristic sigma=1.2; read the reported ε every epoch)
-python run_experiment.py --dataset mnist --mechanism dpsgd --epsilon 2.0 --delta 1e-5 --epochs 5
+# Quick Test Runs:
 
-# 4) Composite-DP on MNIST (bounded + unbiased)
-python run_experiment.py --dataset mnist --mechanism cdp --epsilon 2.0 --delta 1e-5 --epochs 5
+- MNIST, DP-SGD (TF Privacy):
+python train_experiment_tf.py --dataset mnist --mechanism dpsgd --epochs 3 --epsilon 2.0 --delta 1e-5 --batch_size 256 --noise_multiplier 1.1
+
+- MNIST, CompositeDP:
+python train_experiment_tf.py --dataset mnist --mechanism cdp --epochs 3 --epsilon 2.0 --delta 1e-5 --batch_size 256 --noise_multiplier 1.1 --cdp_L 1.0 --cdp_m 0.5 --cdp_y 0.05
+
+- MNIST — NON-DP baseline
+python train_experiment_tf.py --dataset mnist --mechanism none --epochs 3 --batch_size 256
+
+- Adult Income (tabular), DP-SGD:
+python train_experiment_tf.py --dataset adult --mechanism dpsgd --epochs 3 --epsilon 2.0 --delta 1e-5 --batch_size 256 --noise_multiplier 1.1
+
+- Adult Income — CompositeDP (C-DP)
+python train_experiment_tf.py --dataset adult --mechanism cdp --epochs 3 --epsilon 2.0 --delta 1e-5 --batch_size 256 --noise_multiplier 1.1 --cdp_L 1.0 --cdp_m 0.5 --cdp_y 0.05
+
+Each run will save:
+results/<dataset>/<mechanism>/<timestamp>/metrics.json
+results/<dataset>/<mechanism>/<timestamp>/model.keras
+
+# Batch Experiments + plots
+(To sweep over ε ∈ {1, 2, 4, 8} for both MNIST and Adult, both DP-SGD and C-DP:)
+
+1) python batch_run_experiments.py
+2) python plot_results.py
+
+The metrics.json includes:
+- Training curves
+- Final train and test accuracy
+- Mean train and test loss
+- Membership inference AUC
+- For DP-SGD: list of epsilon estimates per epoch and final one
+- For C-DP: composite_dp_calibration containing (L, m, y, k, target_variance, empirical_variance, index)

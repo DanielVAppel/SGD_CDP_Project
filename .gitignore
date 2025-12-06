@@ -1,0 +1,80 @@
+# ---------------------
+# Python cache / build
+# ---------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+*.pickle
+*.h5
+*.ckpt
+*.pb
+*.log
+*.out
+
+# ---------------------
+# Virtual environments
+# ---------------------
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.eggs/
+
+# ---------------------
+# TensorFlow / Keras
+# ---------------------
+checkpoint/
+checkpoints/
+saved_model/
+*.keras
+*.hdf5
+*.pb
+*.tfevents.*
+
+# ---------------------
+# Dataset caches
+# ---------------------
+datasets/
+.cache/
+.cache_tensorflow/
+tensorflow_datasets/
+tfds/
+adultexp/
+
+# ---------------------
+# CompositeDP repo (optional to ignore)
+# If you want to track it in your repo, remove this.
+# ---------------------
+CompositeDP/__pycache__/
+CompositeDP/*.pyc
+
+# ---------------------
+# Experiment Results
+# ---------------------
+results/
+runs/
+metrics/
+plots/
+
+# ---------------------
+# Jupyter / Notebook
+# ---------------------
+.ipynb_checkpoints/
+
+# ---------------------
+# OS-specific metadata
+# ---------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------
+# IDE / Editor
+# ---------------------
+.vscode/
+.idea/
+*.swp
+*.swo
