@@ -32,6 +32,24 @@ def load_mnist(
         "input_shape": x_train.shape[1:],
         "train_size": x_train.shape[0],
     }
+
+        # ============================================================
+    # DEBUG MODE — reduce dataset size for faster DP-SGD training
+    # ============================================================
+    x_train = x_train[:10000]
+    y_train = y_train[:10000]
+
+    x_val = x_val[:2000]
+    y_val = y_val[:2000]
+
+    x_test = x_test[:2000]
+    y_test = y_test[:2000]
+
+    # Update metadata to match reduced dataset
+    metadata["train_size"] = x_train.shape[0]
+    metadata["input_shape"] = x_train.shape[1:]
+    # ============================================================
+    
     return x_train, y_train, x_val, y_val, x_test, y_test, metadata
 
 

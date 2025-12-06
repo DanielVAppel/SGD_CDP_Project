@@ -339,7 +339,10 @@ def main():
 
     # Final evaluation + membership inference attack
     # Compute accuracy and losses on train and test
-    loss_fn_ce = losses.SparseCategoricalCrossentropy(from_logits=False)
+    loss_fn_ce = losses.SparseCategoricalCrossentropy(
+    from_logits=False,
+    reduction=tf.keras.losses.Reduction.NONE
+)
 
     train_logits = model.predict(x_train, verbose=0)
     train_loss_values = loss_fn_ce(y_train, train_logits).numpy()

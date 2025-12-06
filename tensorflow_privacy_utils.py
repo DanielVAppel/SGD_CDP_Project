@@ -1,8 +1,15 @@
+import math
 from typing import Tuple
 
 import tensorflow as tf
+
+# DP-SGD optimizer
 from tensorflow_privacy.privacy.optimizers.dp_optimizer_keras import DPKerasSGDOptimizer
-from tensorflow_privacy.privacy.analysis import compute_dp_sgd_privacy
+
+# New-style import for epsilon computation:
+# In recent tensorflow-privacy versions, compute_dp_sgd_privacy is exposed at the
+# top-level package and backed by compute_dp_sgd_privacy_lib.
+from tensorflow_privacy import compute_dp_sgd_privacy as _tfp_compute_dp_sgd_privacy
 
 
 def build_dp_sgd_optimizer(
@@ -12,7 +19,7 @@ def build_dp_sgd_optimizer(
     num_microbatches: int,
 ) -> tf.keras.optimizers.Optimizer:
     """
-    Create a DPKerasSGDOptimizer instance for DP-SGD training.
+    Build a TensorFlow Privacy DPKerasSGDOptimizer with the given parameters.
     """
     optimizer = DPKerasSGDOptimizer(
         l2_norm_clip=l2_norm_clip,
@@ -31,13 +38,24 @@ def compute_epsilon(
     delta: float,
 ) -> float:
     """
-    Compute epsilon using the TF-Privacy DP-SGD privacy analysis helper.
-    """
-    steps_per_epoch = num_examples // batch_size
-    if steps_per_epoch == 0:
-        return float("nan")
+    Compute epsilon for DP-SGD training using tensorflow-privacy's
+    compute_dp_sgd_privacy helper.
 
-    eps, _ = compute_dp_sgd_privacy.compute_dp_sgd_privacy(
+    Args:
+        num_examples: Size of the training set (N).
+        batch_size: Batch size used in training.
+        num_epochs: Number of epochs run so far.
+        noise_multiplier: Gaussian noise multiplier used in DP-SGD.
+        delta: Target delta.
+
+    Returns:
+        epsilon: The DP epsilon value.
+    """
+    if noise_multiplier == 0.0:
+        # Non-private case, formally eps = inf
+        return float("inf")
+
+    eps, _ = _tfp_compute_dp_sgd_privacy(
         n=num_examples,
         batch_size=batch_size,
         noise_multiplier=noise_multiplier,
