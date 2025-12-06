@@ -31,9 +31,11 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--l2_norm_clip", type=float, default=1.0)
     parser.add_argument("--noise_multiplier", type=float, default=1.1,
                         help="Gaussian noise multiplier for DP-SGD; you can tune this to hit a desired epsilon.")
-    parser.add_argument("--cdp_L", type=float, default=1.0, help="Composite DP parameter L (support bound).")
-    parser.add_argument("--cdp_m", type=float, default=0.5, help="Composite DP parameter m (bump width).")
-    parser.add_argument("--cdp_y", type=float, default=0.05, help="Composite DP base density floor y.")
+    parser.add_argument("--cdp_k", type=float, default=0.5, help="Composite DP parameter k (bump height).")
+    parser.add_argument("--cdp_m", type=float, default=0.4, help="Composite DP parameter m (bump width).")
+    parser.add_argument("--cdp_y", type=float, default=0.3, help="Composite DP base density floor y.")
+    parser.add_argument("--cdp_index", type=int, default=1, choices=[1,2,3,4,5,6], 
+                        help="Composite DP perturbation function index (1-6).")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
@@ -55,8 +57,6 @@ def build_dataset_and_model(dataset_name: str):
 
 
 def make_datasets(x_train, y_train, x_val, y_val, x_test, y_test, batch_size: int):
-    # drop_remainder=True ensures that every batch has exactly batch_size examples,
-    # which is required for DP-SGD when num_microbatches == batch_size.
     train_ds = (
         tf.data.Dataset.from_tensor_slices((x_train, y_train))
         .shuffle(buffer_size=10000)
@@ -65,16 +65,6 @@ def make_datasets(x_train, y_train, x_val, y_val, x_test, y_test, batch_size: in
     val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(batch_size, drop_remainder=True)
     test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(batch_size)
     return train_ds, val_ds, test_ds
-
-
-def compute_per_example_losses(model, x, y, loss_fn) -> np.ndarray:
-    """
-    Compute per-example losses for membership inference.
-    """
-    logits = model.predict(x, verbose=0)
-    y_one_hot = tf.one_hot(y, depth=logits.shape[-1])
-    losses_vec = tf.keras.losses.categorical_crossentropy(y_one_hot, logits, from_logits=False)
-    return np.array(losses_vec, dtype=float)
 
 
 def train_with_dp_sgd(
@@ -92,7 +82,6 @@ def train_with_dp_sgd(
     """
     Train using TensorFlow Privacy DPKerasSGDOptimizer and return metrics including epsilon estimates.
     """
-    # We set num_microbatches = batch_size for simplicity
     optimizer = build_dp_sgd_optimizer(
         learning_rate=learning_rate,
         l2_norm_clip=l2_norm_clip,
@@ -100,7 +89,6 @@ def train_with_dp_sgd(
         num_microbatches=batch_size,
     )
 
-    # Use per-example loss: required by DP-SGD so it can split the batch into microbatches.
     loss_fn = losses.SparseCategoricalCrossentropy(
         from_logits=False,
         reduction=tf.keras.losses.Reduction.NONE
@@ -112,9 +100,6 @@ def train_with_dp_sgd(
 
     history = {"train_loss": [], "val_loss": [], "val_accuracy": [], "epsilon_per_epoch": []}
 
-    # Custom loop over epochs so we can recompute epsilon each epoch
-    steps_per_epoch = num_examples // batch_size
-
     for epoch in range(num_epochs):
         print(f"\n[DP-SGD] Starting epoch {epoch + 1}/{num_epochs}")
         epoch_hist = model.fit(train_ds, epochs=1, validation_data=val_ds, verbose=1)
@@ -122,7 +107,6 @@ def train_with_dp_sgd(
         val_loss = float(epoch_hist.history["val_loss"][-1])
         val_accuracy = float(epoch_hist.history["val_sparse_categorical_accuracy"][-1])
 
-        # Compute epsilon after this epoch
         epsilon_estimate = compute_epsilon(
             num_examples=num_examples,
             batch_size=batch_size,
@@ -153,51 +137,51 @@ def train_with_composite_dp(
     l2_norm_clip: float,
     batch_size: int,
     epsilon: float,
-    cdp_L: float,
+    cdp_k: float,
     cdp_m: float,
     cdp_y: float,
-    target_variance: float,
+    cdp_index: int,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Train with CompositeDP noise added to clipped gradients in a custom training loop.
-    We first auto-calibrate k so that the composite noise variance roughly matches target_variance.
+    Uses the provided k, m, y parameters directly from CompositeDP paper.
     """
     optimizer = optimizers.SGD(learning_rate=learning_rate, momentum=0.9)
     loss_fn = losses.SparseCategoricalCrossentropy(from_logits=False)
     train_acc_metric = metrics.SparseCategoricalAccuracy()
     val_acc_metric = metrics.SparseCategoricalAccuracy()
 
-    # Sensitivity: after clipping, gradient vector has L2 norm at most l2_norm_clip.
-    # For per-coordinate sensitivity in a rough sense, we use l2_norm_clip as upper bound.
+    # Sensitivity is the L2 norm clip value
     sensitivity = l2_norm_clip
-    # We assume gradients live in [-L, L]; we use lower_bound = -cdp_L
-    lower_bound = -cdp_L
-
-    # Step 1: auto-calibrate k
-    calibration_info = auto_calibrate_composite_parameters(
-        epsilon=epsilon,
-        target_variance=target_variance,
-        sensitivity=sensitivity,
-        lower_bound=lower_bound,
-        L=cdp_L,
-        m=cdp_m,
-        y=cdp_y,
-        index=2,  # A2B1
-        calibration_samples=3000,
-    )
-    print("[C-DP] Calibration result:", calibration_info)
+    # Lower bound for the query function
+    lower_bound = 0.0
+    
+    # Store calibration info
+    calibration_info = {
+        "k": float(cdp_k),
+        "m": float(cdp_m),
+        "y": float(cdp_y),
+        "index": int(cdp_index),
+        "sensitivity": float(sensitivity),
+        "lower_bound": float(lower_bound),
+        "epsilon": float(epsilon),
+    }
+    
+    print(f"[C-DP] Using parameters: k={cdp_k}, m={cdp_m}, y={cdp_y}, index={cdp_index}")
 
     history = {"train_loss": [], "val_loss": [], "val_accuracy": []}
 
     for epoch in range(num_epochs):
         print(f"\n[C-DP] Starting epoch {epoch + 1}/{num_epochs}")
-        # Training loop
+        epoch_losses = []
+        
         for step, (x_batch, y_batch) in enumerate(train_ds):
             with tf.GradientTape() as tape:
                 logits = model(x_batch, training=True)
                 loss_value = loss_fn(y_batch, logits)
+                mean_loss = tf.reduce_mean(loss_value)
 
-            gradients = tape.gradient(loss_value, model.trainable_variables)
+            gradients = tape.gradient(mean_loss, model.trainable_variables)
 
             # Clip gradients to have L2 norm at most l2_norm_clip
             clipped_gradients = []
@@ -214,18 +198,19 @@ def train_with_composite_dp(
                     epsilon=epsilon,
                     sensitivity=sensitivity,
                     lower_bound=lower_bound,
-                    L=cdp_L,
+                    k=cdp_k,
                     m=cdp_m,
                     y=cdp_y,
-                    k=calibration_info["k"],
-                    index=calibration_info["index"],
+                    index=cdp_index,
                 )
                 clipped_gradients.append(tf.convert_to_tensor(noisy_g, dtype=g.dtype))
 
             optimizer.apply_gradients(zip(clipped_gradients, model.trainable_variables))
             train_acc_metric.update_state(y_batch, model(x_batch, training=False))
+            epoch_losses.append(float(mean_loss.numpy()))
 
         # End of epoch: compute training loss and validation metrics
+        train_loss = float(np.mean(epoch_losses))
         train_acc = float(train_acc_metric.result().numpy())
         train_acc_metric.reset_states()
 
@@ -234,19 +219,19 @@ def train_with_composite_dp(
         for x_val_batch, y_val_batch in val_ds:
             val_logits = model(x_val_batch, training=False)
             val_loss_value = loss_fn(y_val_batch, val_logits)
-            val_losses.append(float(val_loss_value.numpy()))
+            val_losses.append(float(tf.reduce_mean(val_loss_value).numpy()))
             val_acc_metric.update_state(y_val_batch, val_logits)
 
         val_loss = float(np.mean(val_losses))
         val_acc = float(val_acc_metric.result().numpy())
         val_acc_metric.reset_states()
 
-        history["train_loss"].append(float(loss_value.numpy()))
+        history["train_loss"].append(train_loss)
         history["val_loss"].append(val_loss)
         history["val_accuracy"].append(val_acc)
 
         print(
-            f"[C-DP] Epoch {epoch + 1}: train_loss={float(loss_value.numpy()):.4f}, "
+            f"[C-DP] Epoch {epoch + 1}: train_loss={train_loss:.4f}, "
             f"val_loss={val_loss:.4f}, val_acc={val_acc:.4f}"
         )
 
@@ -268,9 +253,9 @@ def train_without_dp(
     model.compile(optimizer=optimizer, loss=loss_fn, metrics=["accuracy"])
     history = model.fit(train_ds, epochs=num_epochs, validation_data=val_ds, verbose=1)
     return {
-        "train_loss": history.history["loss"],
-        "val_loss": history.history["val_loss"],
-        "val_accuracy": history.history["val_accuracy"],
+        "train_loss": [float(x) for x in history.history["loss"]],
+        "val_loss": [float(x) for x in history.history["val_loss"]],
+        "val_accuracy": [float(x) for x in history.history["val_accuracy"]],
     }
 
 
@@ -304,12 +289,9 @@ def main():
             delta=args.delta,
         )
         results["training_history"] = history
-        # We use the last epsilon as the summary
         results["epsilon_estimate"] = history["epsilon_per_epoch"][-1] if history["epsilon_per_epoch"] else None
 
     elif args.mechanism == "cdp":
-        # For matching variance we use a target, the starting point is using noise_multiplier^2.
-        gaussian_variance = args.noise_multiplier ** 2
         history, calibration_info = train_with_composite_dp(
             model=model,
             train_ds=train_ds,
@@ -319,10 +301,10 @@ def main():
             l2_norm_clip=args.l2_norm_clip,
             batch_size=args.batch_size,
             epsilon=args.epsilon,
-            cdp_L=args.cdp_L,
+            cdp_k=args.cdp_k,
             cdp_m=args.cdp_m,
             cdp_y=args.cdp_y,
-            target_variance=gaussian_variance,
+            cdp_index=args.cdp_index,
         )
         results["training_history"] = history
         results["composite_dp_calibration"] = calibration_info
@@ -338,11 +320,10 @@ def main():
         results["training_history"] = history
 
     # Final evaluation + membership inference attack
-    # Compute accuracy and losses on train and test
     loss_fn_ce = losses.SparseCategoricalCrossentropy(
-    from_logits=False,
-    reduction=tf.keras.losses.Reduction.NONE
-)
+        from_logits=False,
+        reduction=tf.keras.losses.Reduction.NONE
+    )
 
     train_logits = model.predict(x_train, verbose=0)
     train_loss_values = loss_fn_ce(y_train, train_logits).numpy()
@@ -373,11 +354,18 @@ def main():
 
     model.save(model_path)
 
-    print(f"\nSaved metrics to: {metrics_path}")
-    print(f"Saved model to:   {model_path}")
+    print(f"\n{'='*60}")
+    print(f"Training complete!")
+    print(f"{'='*60}")
+    print(f"Dataset: {args.dataset}")
+    print(f"Mechanism: {args.mechanism}")
+    print(f"Final test accuracy: {test_accuracy:.4f}")
     print(f"Membership inference AUC: {mi_auc:.4f}")
     if args.mechanism == "dpsgd":
-        print(f"Final epsilon estimate (DP-SGD): {results.get('epsilon_estimate')}")
+        print(f"Final epsilon estimate: {results.get('epsilon_estimate'):.3f}")
+    print(f"\nSaved metrics to: {metrics_path}")
+    print(f"Saved model to:   {model_path}")
+    print(f"{'='*60}\n")
 
 
 if __name__ == "__main__":

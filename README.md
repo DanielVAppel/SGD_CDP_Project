@@ -40,7 +40,7 @@ python -m pip install tensorflow-probability==0.19.0
 python train_experiment_tf.py --dataset mnist --mechanism dpsgd --epochs 1 --epsilon 2.0 --delta 1e-5 --batch_size 256 --noise_multiplier 1.1
 
 - MNIST, CompositeDP:
-python train_experiment_tf.py --dataset mnist --mechanism cdp --epochs 1 --epsilon 2.0 --delta 1e-5 --batch_size 256 --noise_multiplier 1.1 --cdp_L 1.0 --cdp_m 0.5 --cdp_y 0.05
+python train_experiment_tf.py --dataset mnist --mechanism cdp --epochs 1 --epsilon 2.0 --batch_size 256 --cdp_k 0.5 --cdp_m 0.4 --cdp_y 0.3 --cdp_index 1
 
 - MNIST — NON-DP baseline
 python train_experiment_tf.py --dataset mnist --mechanism none --epochs 1 --batch_size 256
@@ -49,7 +49,7 @@ python train_experiment_tf.py --dataset mnist --mechanism none --epochs 1 --batc
 python train_experiment_tf.py --dataset adult --mechanism dpsgd --epochs 1 --epsilon 2.0 --delta 1e-5 --batch_size 256 --noise_multiplier 1.1
 
 - Adult Income — CompositeDP (C-DP)
-python train_experiment_tf.py --dataset adult --mechanism cdp --epochs 1 --epsilon 2.0 --delta 1e-5 --batch_size 256 --noise_multiplier 1.1 --cdp_L 1.0 --cdp_m 0.5 --cdp_y 0.05
+python train_experiment_tf.py --dataset adult --mechanism cdp --epochs 1 --epsilon 2.0 --delta 1e-5 --batch_size 256 --cdp_k 0.5 --cdp_m 0.4 --cdp_y 0.3 --cdp_index 1
 
 Each run will save:
 results/<dataset>/<mechanism>/<timestamp>/metrics.json

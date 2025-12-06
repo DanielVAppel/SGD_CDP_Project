@@ -14,7 +14,9 @@ def run_one(config: Dict[str, Any]) -> None:
         flag = f"--{key.replace('_', '-')}"
         cmd.append(flag)
         cmd.append(str(value))
-    print("\nRunning:", " ".join(cmd))
+    print("\n" + "="*80)
+    print("Running:", " ".join(cmd))
+    print("="*80)
     subprocess.run(cmd, check=True)
 
 
@@ -32,15 +34,21 @@ def main():
         "l2_norm_clip": 1.0,
         "results_dir": "results",
         "seed": 42,
-        # Composite DP base parameters (can be tuned later)
-        "cdp_L": 1.0,
-        "cdp_m": 0.5,
-        "cdp_y": 0.05,
+        # Composite DP parameters (from Example1.py)
+        "cdp_k": 0.5,
+        "cdp_m": 0.4,
+        "cdp_y": 0.3,
+        "cdp_index": 1,  # Use Perturbation-1 (Activation-1 + Base-1)
     }
 
-    # We can hand-tune noise_multiplier for each epsilon
-    # For now, we use the same noise_multiplier for all epsilons as a starting point.
-    noise_multiplier_for_all = 1.1
+    # Different noise multipliers for different epsilon targets
+    # These are approximate and may need tuning
+    noise_multiplier_map = {
+        1.0: 2.0,
+        2.0: 1.1,
+        4.0: 0.7,
+        8.0: 0.4,
+    }
 
     configs: List[Dict[str, Any]] = []
     for dataset, mechanism, epsilon in itertools.product(datasets, mechanisms, epsilons):
@@ -48,11 +56,21 @@ def main():
         cfg["dataset"] = dataset
         cfg["mechanism"] = mechanism
         cfg["epsilon"] = epsilon
-        cfg["noise_multiplier"] = noise_multiplier_for_all
+        cfg["noise_multiplier"] = noise_multiplier_map[epsilon]
         configs.append(cfg)
 
-    for cfg in configs:
-        run_one(cfg)
+    print(f"\nTotal experiments to run: {len(configs)}")
+    print("="*80)
+    
+    for i, cfg in enumerate(configs, 1):
+        print(f"\n\nExperiment {i}/{len(configs)}")
+        print(f"Dataset: {cfg['dataset']}, Mechanism: {cfg['mechanism']}, Epsilon: {cfg['epsilon']}")
+        try:
+            run_one(cfg)
+        except subprocess.CalledProcessError as e:
+            print(f"ERROR: Experiment failed with error code {e.returncode}")
+            print("Continuing with next experiment...")
+            continue
 
 
 if __name__ == "__main__":
