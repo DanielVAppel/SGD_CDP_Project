@@ -48,8 +48,8 @@ adultexp/
 # CompositeDP repo (optional to ignore)
 # If you want to track it in your repo, remove this.
 # ---------------------
-CompositeDP/__pycache__/
-CompositeDP/*.pyc
+#CompositeDP/__pycache__/
+#CompositeDP/*.pyc
 
 # ---------------------
 # Experiment Results

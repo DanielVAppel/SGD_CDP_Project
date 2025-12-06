@@ -19,6 +19,8 @@ SGD_CDP_Project/
 
 # How to Run:
 
+Ensure you are using Python 3.11 or below
+
 # 1) (optional) create venv
 python -m venv .venv
 # Windows:
@@ -27,7 +29,10 @@ python -m venv .venv
 # source .venv/bin/activate
 
 # 2) install
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
+python -m pip install tensorflow-privacy==0.8.12 --no-deps
+python -m pip install dp-accounting==0.4.3
+python -m pip install tensorflow-probability==0.19.0
 
 # Quick Test Runs:
 

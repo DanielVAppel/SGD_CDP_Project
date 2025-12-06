@@ -55,8 +55,14 @@ def build_dataset_and_model(dataset_name: str):
 
 
 def make_datasets(x_train, y_train, x_val, y_val, x_test, y_test, batch_size: int):
-    train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(buffer_size=10000).batch(batch_size)
-    val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(batch_size)
+    # drop_remainder=True ensures that every batch has exactly batch_size examples,
+    # which is required for DP-SGD when num_microbatches == batch_size.
+    train_ds = (
+        tf.data.Dataset.from_tensor_slices((x_train, y_train))
+        .shuffle(buffer_size=10000)
+        .batch(batch_size, drop_remainder=True)
+    )
+    val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(batch_size, drop_remainder=True)
     test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(batch_size)
     return train_ds, val_ds, test_ds
 
@@ -67,8 +73,8 @@ def compute_per_example_losses(model, x, y, loss_fn) -> np.ndarray:
     """
     logits = model.predict(x, verbose=0)
     y_one_hot = tf.one_hot(y, depth=logits.shape[-1])
-    losses = tf.keras.losses.categorical_crossentropy(y_one_hot, logits, from_logits=False)
-    return np.array(losses, dtype=float)
+    losses_vec = tf.keras.losses.categorical_crossentropy(y_one_hot, logits, from_logits=False)
+    return np.array(losses_vec, dtype=float)
 
 
 def train_with_dp_sgd(
@@ -93,7 +99,12 @@ def train_with_dp_sgd(
         noise_multiplier=noise_multiplier,
         num_microbatches=batch_size,
     )
-    loss_fn = losses.SparseCategoricalCrossentropy(from_logits=False)
+
+    # Use per-example loss: required by DP-SGD so it can split the batch into microbatches.
+    loss_fn = losses.SparseCategoricalCrossentropy(
+        from_logits=False,
+        reduction=tf.keras.losses.Reduction.NONE
+    )
     train_acc = metrics.SparseCategoricalAccuracy()
     val_acc = metrics.SparseCategoricalAccuracy()
 

@@ -10,8 +10,7 @@ COMPOSITE_DP_DIR = os.path.join(os.path.dirname(BASE_DIR), "CompositeDP")
 if COMPOSITE_DP_DIR not in sys.path:
     sys.path.append(COMPOSITE_DP_DIR)
 
-from Perturbation_Mechanism import perturbation_fun_multipleCall  # type: ignore
-
+from CompositeDP.Perturbation_Mechanism import perturbation_fun_multipleCall # type: ignore
 
 def generate_composite_dp_noise_samples(
     epsilon: float,
