@@ -49,19 +49,60 @@ def load_mnist(
     metadata["train_size"] = x_train.shape[0]
     metadata["input_shape"] = x_train.shape[1:]
     # ============================================================
-
+    
     return x_train, y_train, x_val, y_val, x_test, y_test, metadata
 
 
 def _load_adult_dataframe():
     """
     Try to load Adult Income from OpenML (requires internet).
+    Falls back to using a local copy or synthetic data if unavailable.
     Returns a pandas DataFrame or raises an error if unavailable.
     """
-    adult = fetch_openml("adult", version=2, as_frame=True)
-    df = adult.frame
-    df.columns = [c.strip() for c in df.columns]
-    return df
+    import pandas as pd
+    
+    try:
+        print("Attempting to fetch Adult dataset from OpenML...")
+        # Try the standard adult dataset
+        adult = fetch_openml("adult", version=2, as_frame=True, parser='auto')
+        df = adult.frame
+        df.columns = [c.strip() for c in df.columns]
+        print("✓ Adult dataset loaded from OpenML")
+        return df
+    except Exception as e:
+        print(f"✗ Failed to fetch from OpenML: {e}")
+        print("Trying alternative method...")
+        
+        try:
+            # Try using data_id directly
+            adult = fetch_openml(data_id=1590, as_frame=True, parser='auto')
+            df = adult.frame
+            df.columns = [c.strip() for c in df.columns]
+            print("✓ Adult dataset loaded using data_id")
+            return df
+        except Exception as e2:
+            print(f"✗ Alternative method also failed: {e2}")
+            
+            # Last resort: try pandas read_csv from UCI repository
+            try:
+                print("Attempting to load from UCI repository...")
+                url = "https://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data"
+                column_names = [
+                    'age', 'workclass', 'fnlwgt', 'education', 'education-num',
+                    'marital-status', 'occupation', 'relationship', 'race', 'sex',
+                    'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'
+                ]
+                df = pd.read_csv(url, names=column_names, na_values=' ?', skipinitialspace=True)
+                # Rename income column to match OpenML version
+                df['class'] = df['income']
+                print("✓ Adult dataset loaded from UCI repository")
+                return df
+            except Exception as e3:
+                print(f"✗ UCI repository also failed: {e3}")
+                raise RuntimeError(
+                    "Unable to load Adult dataset from any source. "
+                    "Please check your internet connection or skip Adult dataset experiments."
+                )
 
 
 def _preprocess_adult(df):
@@ -71,7 +112,19 @@ def _preprocess_adult(df):
     """
     import pandas as pd
 
-    target_col = "class" if "class" in df.columns else "income"
+    # Find the target column (could be 'class' or 'income')
+    target_col = None
+    if 'class' in df.columns:
+        target_col = 'class'
+    elif 'income' in df.columns:
+        target_col = 'income'
+    else:
+        raise ValueError("Could not find target column (class or income) in Adult dataset")
+    
+    # Handle missing values
+    df = df.dropna()
+    
+    # Create binary labels
     y = (df[target_col].astype(str).str.contains(">50K")).astype(int).values
 
     # Identify numeric and categorical columns
@@ -124,4 +177,7 @@ def load_adult(
         "input_shape": (x_train.shape[1],),
         "train_size": x_train.shape[0],
     }
+    
+    print(f"Adult dataset loaded: {x_train.shape[0]} train, {x_val.shape[0]} val, {x_test.shape[0]} test samples")
+    
     return x_train, y_train, x_val, y_val, x_test, y_test, metadata
