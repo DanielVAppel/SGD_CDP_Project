@@ -1,17 +1,20 @@
 import itertools
-import json
 import subprocess
 from pathlib import Path
 from typing import List, Dict, Any
+import itertools
+import json
+import sys
+import time
 
 
 def run_one(config: Dict[str, Any]) -> None:
     """
     Call train_experiment_tf.py with the given configuration.
     """
-    cmd = ["python", "train_experiment_tf.py"]
+    cmd = [sys.executable, "train_experiment_tf.py"]
     for key, value in config.items():
-        flag = f"--{key.replace('_', '-')}"
+        flag = f"--{key}"
         cmd.append(flag)
         cmd.append(str(value))
     print("\n" + "="*80)
