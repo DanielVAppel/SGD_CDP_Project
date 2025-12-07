@@ -1,0 +1,50 @@
+{
+  "args": {
+    "dataset": "mnist",
+    "mechanism": "dpsgd",
+    "epsilon": 2.0,
+    "delta": 1e-05,
+    "batch_size": 256,
+    "epochs": 1,
+    "learning_rate": 0.15,
+    "l2_norm_clip": 1.0,
+    "noise_multiplier": 1.1,
+    "cdp_k": 0.5,
+    "cdp_m": 0.4,
+    "cdp_y": 0.3,
+    "cdp_index": 1,
+    "results_dir": "results",
+    "seed": 42
+  },
+  "dataset_metadata": {
+    "num_classes": 10,
+    "input_shape": [
+      28,
+      28,
+      1
+    ],
+    "train_size": 10000
+  },
+  "mechanism": "dpsgd",
+  "start_time": "2025-12-06 15:14:12",
+  "training_history": {
+    "train_loss": [
+      2.2123947143554688
+    ],
+    "val_loss": [
+      2.065107822418213
+    ],
+    "val_accuracy": [
+      0.4140625
+    ],
+    "epsilon_per_epoch": [
+      1.444088272759328
+    ]
+  },
+  "epsilon_estimate": 1.444088272759328,
+  "final_train_accuracy": 0.4173,
+  "final_test_accuracy": 0.3955,
+  "final_train_loss_mean": 2.056743860244751,
+  "final_test_loss_mean": 2.074434280395508,
+  "membership_inference_auc": 0.522150225
+}

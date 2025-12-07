@@ -47,10 +47,10 @@ adultexp/
 # ---------------------
 # Experiment Results
 # ---------------------
-results/
-runs/
-metrics/
-plots/
+#results/
+#runs/
+#metrics/
+#plots/
 
 # ---------------------
 # Jupyter / Notebook

@@ -1,0 +1,65 @@
+{
+  "args": {
+    "dataset": "adult",
+    "mechanism": "cdp",
+    "epsilon": 8.0,
+    "delta": 1e-05,
+    "batch_size": 256,
+    "epochs": 5,
+    "learning_rate": 0.15,
+    "l2_norm_clip": 1.0,
+    "noise_multiplier": 0.4,
+    "cdp_k": 0.5,
+    "cdp_m": 0.4,
+    "cdp_y": 0.3,
+    "cdp_index": 1,
+    "results_dir": "results",
+    "seed": 42
+  },
+  "dataset_metadata": {
+    "num_classes": 2,
+    "input_shape": [
+      104
+    ],
+    "train_size": 32559
+  },
+  "mechanism": "cdp",
+  "start_time": "2025-12-06 22:03:36",
+  "training_history": {
+    "train_loss": [
+      0.39373092505875534,
+      0.35068358821193063,
+      0.3262708731523649,
+      0.32406207684456834,
+      0.3259706660283832
+    ],
+    "val_loss": [
+      0.33012744571481434,
+      0.319925280553954,
+      0.31624150914805277,
+      0.3323663813727243,
+      0.31992766686848234
+    ],
+    "val_accuracy": [
+      0.8482142686843872,
+      0.8537946343421936,
+      0.8577008843421936,
+      0.8412388563156128,
+      0.8532366156578064
+    ]
+  },
+  "composite_dp_calibration": {
+    "k": 0.5,
+    "m": 0.4,
+    "y": 0.3,
+    "index": 1,
+    "sensitivity": 1.0,
+    "lower_bound": 0.0,
+    "epsilon": 8.0
+  },
+  "final_train_accuracy": 0.8518074879449614,
+  "final_test_accuracy": 0.8483139856274184,
+  "final_train_loss_mean": 0.31885209679603577,
+  "final_test_loss_mean": 0.3211812674999237,
+  "membership_inference_auc": 0.5034227068261723
+}
