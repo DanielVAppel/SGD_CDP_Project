@@ -1,11 +1,8 @@
 import itertools
 import subprocess
-from pathlib import Path
 from typing import List, Dict, Any
 import itertools
-import json
 import sys
-import time
 
 
 def run_one(config: Dict[str, Any]) -> None:
@@ -42,7 +39,6 @@ def main():
     }
 
     # Different noise multipliers for different epsilon targets
-    # These are approximate and may need tuning
     noise_multiplier_map = {
         1.0: 2.0,
         2.0: 1.1,
@@ -60,11 +56,7 @@ def main():
         configs.append(cfg)
 
     print(f"\nTotal experiments to run: {len(configs)}")
-    print("="*80)
-    print("\nNOTE: C-DP will run parameter optimization for each experiment.")
-    print("This adds ~1-5 seconds per run but finds optimal k, m, y parameters.")
-    print("="*80)
-    
+
     for i, cfg in enumerate(configs, 1):
         print(f"\n\nExperiment {i}/{len(configs)}")
         print(f"Dataset: {cfg['dataset']}, Mechanism: {cfg['mechanism']}, Epsilon: {cfg['epsilon']}")
