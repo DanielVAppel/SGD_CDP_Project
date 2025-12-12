@@ -1,26 +1,20 @@
 import os
 import sys
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 import numpy as np
 
-# Ensure CompositeDP is importable
+# Ensure we can import from the CompositeDP repository
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 COMPOSITE_DP_DIR = os.path.join(BASE_DIR, "CompositeDP")
 if COMPOSITE_DP_DIR not in sys.path:
-    sys.path.insert(0, COMPOSITE_DP_DIR)
+    sys.path.append(COMPOSITE_DP_DIR)
 
-try:
-    from CompositeDP.Perturbation_Mechanism import perturbation_fun_multipleCall
-    from CompositeDP.Mechanism.Constraints import checkConstraints
-except ImportError as e:
-    print(f"Error importing CompositeDP: {e}")
-    print(f"Make sure CompositeDP directory is at: {COMPOSITE_DP_DIR}")
-    raise
+from CompositeDP.Perturbation_Mechanism import perturbation_fun_multipleCall  # type: ignore
+from CompositeDP.Mechanism.Parameter_Optimization import parameter_optimization  # type: ignore
 
 
-def add_composite_dp_noise_to_gradient(
-    gradient_array: np.ndarray,
+def generate_composite_dp_noise_samples(
     epsilon: float,
     sensitivity: float,
     lower_bound: float,
@@ -28,126 +22,28 @@ def add_composite_dp_noise_to_gradient(
     m: float,
     y: float,
     index: int,
+    sample_count: int,
 ) -> np.ndarray:
     """
-    Adds CompositeDP noise element-wise to a gradient array.
-    
-    This function generates noise samples using the Composite DP mechanism
-    and adds them to each gradient component.
-    
-    Args:
-        gradient_array: The gradient array to add noise to
-        epsilon: Privacy budget
-        sensitivity: Sensitivity of the query (L2 norm clip)
-        lower_bound: Lower bound of the query output range
-        k: CompositeDP parameter (bump height)
-        m: CompositeDP parameter (bump width)
-        y: CompositeDP parameter (base density)
-        index: CompositeDP perturbation function index (1-6)
-    
-    Returns:
-        The gradient array with CompositeDP noise added
-    """
-    flat_grad = gradient_array.reshape(-1)
-    sample_count = flat_grad.shape[0]
-    
-    # fd = 0 means we want noise centered at 0
-    fd = 0.0
-    
-    try:
-        # Generate noise samples using CompositeDP
-        noisy_samples = perturbation_fun_multipleCall(
-            epsilon,
-            fd,
-            sensitivity,
-            lower_bound,
-            k,
-            m,
-            y,
-            index,
-            sample_count,
-        )
-        
-        # Convert to numpy array
-        noisy_samples = np.asarray(noisy_samples, dtype=float)
-        
-        # Extract pure noise by subtracting fd
-        noise = noisy_samples - fd
-        
-        # Check for invalid values
-        if noise.size == 0 or np.isnan(noise).any() or np.isinf(noise).any():
-            print("[C-DP] WARNING: Invalid noise detected. Using zero noise for this batch.")
-            return gradient_array
-        
-        # Add noise to gradient
-        noisy_flat = flat_grad + noise
-        return noisy_flat.reshape(gradient_array.shape)
-        
-    except Exception as e:
-        print(f"[C-DP] WARNING: CompositeDP noise generation failed: {e}")
-        print("[C-DP] Using zero noise for this batch.")
-        return gradient_array
+    Use perturbation_fun_multipleCall from CompositeDP to generate composite DP noise samples.
 
-
-def test_composite_parameters(
-    epsilon: float,
-    sensitivity: float,
-    lower_bound: float,
-    k: float,
-    m: float,
-    y: float,
-    index: int,
-    test_samples: int = 100,
-) -> Dict[str, Any]:
+    We treat the raw query f(D) as 0 for calibration and only look at the added noise.
     """
-    Test if the given CompositeDP parameters satisfy the constraints
-    and can generate valid noise samples.
-    
-    Returns:
-        Dictionary with test results including:
-        - constraints_ok: whether constraints are satisfied
-        - can_generate: whether noise can be generated
-        - sample_variance: variance of test samples (if generation succeeds)
-        - sample_mean: mean of test samples (if generation succeeds)
-    """
-    # Test fd = 0 (pure noise)
-    fd = 0.0
-    
-    # Check constraints
-    # Map fd to Cp space for constraint checking
-    from CompositeDP.Mechanism.Mapping import mapping_fromRealToL
-    Cp = mapping_fromRealToL(fd, sensitivity, lower_bound, epsilon, k, m, y, index)
-    
-    constraints_result = checkConstraints(epsilon, k, m, y, Cp, index)
-    constraints_ok = (constraints_result == 0)
-    
-    result = {
-        "constraints_ok": constraints_ok,
-        "constraint_code": constraints_result,
-        "can_generate": False,
-        "sample_variance": None,
-        "sample_mean": None,
-    }
-    
-    if not constraints_ok:
-        return result
-    
-    # Try to generate samples
-    try:
-        noisy_samples = perturbation_fun_multipleCall(
-            epsilon, fd, sensitivity, lower_bound, k, m, y, index, test_samples
-        )
-        noisy_samples = np.asarray(noisy_samples, dtype=float)
-        noise = noisy_samples - fd
-        
-        if noise.size > 0 and not np.isnan(noise).any() and not np.isinf(noise).any():
-            result["can_generate"] = True
-            result["sample_variance"] = float(np.var(noise))
-            result["sample_mean"] = float(np.mean(noise))
-    except Exception as e:
-        result["error"] = str(e)
-    
-    return result
+    fd = 0.0  # raw query result f(D); we use 0 for calibration
+    results = perturbation_fun_multipleCall(
+        epsilon,
+        fd,
+        sensitivity,
+        lower_bound,
+        k,
+        m,
+        y,
+        index,
+        sample_count,
+    )
+    results_array = np.array(results, dtype=float)
+    noise = results_array - fd
+    return noise
 
 
 def auto_calibrate_composite_parameters(
@@ -159,55 +55,88 @@ def auto_calibrate_composite_parameters(
     m: float,
     y: float,
     index: int = 2,
-    candidate_k_values: List[float] = None,
     calibration_samples: int = 2000,
 ) -> Dict[str, Any]:
     """
-    Auto-calibrate k parameter to match target variance.
-    This function is kept for backward compatibility but is not recommended.
-    Better to use fixed parameters from the CompositeDP paper.
-    """
-    if candidate_k_values is None:
-        candidate_k_values = [0.05, 0.1, 0.2, 0.3, 0.5]
+    Enumeration-based parameter selection used in the paper.
 
-    best_k = None
-    best_variance = None
-    lowest_error = float("inf")
-    
-    print(f"[C-DP] Auto-calibrating k parameter...")
-    print(f"[C-DP] Target variance: {target_variance:.6f}")
-    
-    for k in candidate_k_values:
-        test_result = test_composite_parameters(
-            epsilon, sensitivity, lower_bound, k, m, y, index, calibration_samples
-        )
-        
-        if not test_result["can_generate"]:
-            continue
-        
-        emp_var = test_result["sample_variance"]
-        error = abs(emp_var - target_variance)
-        
-        print(f"[C-DP]   k={k:.3f}: variance={emp_var:.6f}, error={error:.6f}")
-        
-        if error < lowest_error:
-            lowest_error = error
-            best_k = k
-            best_variance = emp_var
-    
-    if best_k is None:
-        print("[C-DP] WARNING: All candidate k values failed. Using default k=0.1")
-        best_k = 0.1
-        best_variance = 0.0
-    else:
-        print(f"[C-DP] Best k={best_k:.3f} with variance={best_variance:.6f}")
-    
+    Instead of manually sweeping over many (k, m, y) combinations, we delegate to
+    CompositeDP.Mechanism.Parameter_Optimization.parameter_optimization, which
+    searches over the grid defined in the original CompositeDP library.
+
+    We then empirically estimate the variance of the resulting mechanism so we can
+    log how close it is to the target_variance (typically the matching Gaussian variance).
+
+    Returns:
+        Dictionary with L, m, y, k, index, target_variance, empirical_variance.
+    """
+    # Run the library's enumeration-based optimizer.
+    # NOTE: This optimizer ignores the L, m, y arguments you pass here and returns its
+    # own best (k, m, y) for the given epsilon and index.
+    k_opt, m_opt, y_opt = parameter_optimization(epsilon, index=index)
+
+    # Empirically estimate the variance of the resulting mechanism for logging.
+    noise = generate_composite_dp_noise_samples(
+        epsilon=epsilon,
+        sensitivity=sensitivity,
+        lower_bound=lower_bound,
+        k=k_opt,
+        m=m_opt,
+        y=y_opt,
+        index=index,
+        sample_count=calibration_samples,
+    )
+    empirical_variance = float(np.var(noise))
+
     return {
         "L": float(L),
-        "m": float(m),
-        "y": float(y),
-        "k": float(best_k),
+        "m": float(m_opt),
+        "y": float(y_opt),
+        "k": float(k_opt),
         "index": int(index),
         "target_variance": float(target_variance),
-        "empirical_variance": float(best_variance),
+        "empirical_variance": empirical_variance,
     }
+
+
+def add_composite_dp_noise_to_gradient(
+    gradient_array: np.ndarray,
+    epsilon: float,
+    sensitivity: float,
+    lower_bound: float,
+    L: float,
+    m: float,
+    y: float,
+    k: float,
+    index: int,
+) -> np.ndarray:
+    """
+    Apply CompositeDP noise element-wise to a flattened gradient array and reshape back.
+
+    This calls perturbation_fun_multipleCall once to generate as many samples as there are
+    gradient components, then adds them to the original gradient.
+    """
+    flat = gradient_array.reshape(-1)
+    sample_count = flat.shape[0]
+
+    # Draw composite-DP perturbed values around 0 and interpret them as noise.
+    results = perturbation_fun_multipleCall(
+        epsilon,
+        0.0,  # fd, the raw f(D); we take 0 so that outputs are just noise
+        sensitivity,
+        lower_bound,
+        k,
+        m,
+        y,
+        index,
+        sample_count,
+    )
+    noise_array = np.array(results, dtype=float)
+    if noise_array.shape[0] != flat.shape[0]:
+        raise ValueError(
+            f"CompositeDP returned {noise_array.shape[0]} samples "
+            f"but gradient has {flat.shape[0]} components."
+        )
+
+    noisy_flat = flat + noise_array
+    return noisy_flat.reshape(gradient_array.shape)

@@ -37,11 +37,8 @@ def main():
         "l2_norm_clip": 1.0,
         "results_dir": "results",
         "seed": 42,
-        # Composite DP parameters (from Example1.py)
-        "cdp_k": 0.5,
-        "cdp_m": 0.4,
-        "cdp_y": 0.3,
-        "cdp_index": 1,  # Use Perturbation-1 (Activation-1 + Base-1)
+        # Composite DP index (using A1B1: rectangular activation + constant base)
+        "cdp_index": 1,
     }
 
     # Different noise multipliers for different epsilon targets
@@ -63,6 +60,9 @@ def main():
         configs.append(cfg)
 
     print(f"\nTotal experiments to run: {len(configs)}")
+    print("="*80)
+    print("\nNOTE: C-DP will run parameter optimization for each experiment.")
+    print("This adds ~1-5 seconds per run but finds optimal k, m, y parameters.")
     print("="*80)
     
     for i, cfg in enumerate(configs, 1):
