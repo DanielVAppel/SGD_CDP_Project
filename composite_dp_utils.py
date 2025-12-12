@@ -10,8 +10,8 @@ COMPOSITE_DP_DIR = os.path.join(BASE_DIR, "CompositeDP")
 if COMPOSITE_DP_DIR not in sys.path:
     sys.path.append(COMPOSITE_DP_DIR)
 
-from CompositeDP.Perturbation_Mechanism import perturbation_fun_multipleCall  # type: ignore
-from CompositeDP.Mechanism.Parameter_Optimization import parameter_optimization  # type: ignore
+from CompositeDP.Perturbation_Mechanism import perturbation_fun_multipleCall  
+from CompositeDP.Mechanism.Parameter_Optimization import parameter_optimization  
 
 
 def generate_composite_dp_noise_samples(
@@ -64,15 +64,10 @@ def auto_calibrate_composite_parameters(
     CompositeDP.Mechanism.Parameter_Optimization.parameter_optimization, which
     searches over the grid defined in the original CompositeDP library.
 
-    We then empirically estimate the variance of the resulting mechanism so we can
-    log how close it is to the target_variance (typically the matching Gaussian variance).
-
     Returns:
         Dictionary with L, m, y, k, index, target_variance, empirical_variance.
     """
     # Run the library's enumeration-based optimizer.
-    # NOTE: This optimizer ignores the L, m, y arguments you pass here and returns its
-    # own best (k, m, y) for the given epsilon and index.
     k_opt, m_opt, y_opt = parameter_optimization(epsilon, index=index)
 
     # Empirically estimate the variance of the resulting mechanism for logging.
